@@ -3,11 +3,15 @@ package com.core.config;
 
 import io.github.bonigarcia.wdm.WebDriverManager;
 import org.openqa.selenium.chrome.ChromeOptions;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration
 public class WebDriverConfig {
+
+    @Autowired
+    private SeleniumProperties seleniumProperties;
 
     /**
      * Initialize WebDriverManager for Chrome.
@@ -25,10 +29,22 @@ public class WebDriverConfig {
     @Bean
     public ChromeOptions chromeOptions() {
         ChromeOptions options = new ChromeOptions();
-        options.addArguments("--headless=new");
+
+        // Add default arguments based on configuration
+        if (seleniumProperties.isHeadlessByDefault()) {
+            options.addArguments("--headless=new");
+        }
+
+        // Add standard arguments for stability
         options.addArguments("--disable-gpu");
         options.addArguments("--no-sandbox");
         options.addArguments("--disable-dev-shm-usage");
+
+        // Add any custom arguments from properties
+        if (seleniumProperties.getChromeOptions() != null && !seleniumProperties.getChromeOptions().isEmpty()) {
+            options.addArguments(seleniumProperties.getChromeOptions());
+        }
+
         return options;
     }
 }
