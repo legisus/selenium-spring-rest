@@ -376,5 +376,34 @@ public class WebDriverElementService {
 
         return result;
     }
+
+    /**
+     * Check if element is selected
+     *
+     * @param sessionId The session ID of the WebDriver
+     * @param elementId The element ID
+     * @return Map with selected status or error information
+     */
+    public Map<String, Object> isElementSelected(String sessionId, String elementId) {
+        Map<String, Object> result = new HashMap<>();
+
+        WebElement element = elementReferenceManager.getElement(sessionId, elementId);
+        if (element == null) {
+            result.put("success", false);
+            result.put("error", "Element not found or expired");
+            return result;
+        }
+
+        try {
+            boolean selected = element.isSelected();
+            result.put("success", true);
+            result.put("selected", selected);
+        } catch (Exception e) {
+            result.put("success", false);
+            result.put("error", "Error checking if element is selected: " + e.getMessage());
+        }
+
+        return result;
+    }
 }
 
