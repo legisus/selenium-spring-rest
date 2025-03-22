@@ -8,6 +8,8 @@ A comprehensive REST API for orchestrating Selenium WebDriver, built with Spring
 - Modular architecture with separated concerns
 - Chrome browser automation
 - Multiple simultaneous browser sessions
+- System monitoring and resource usage statistics
+- Session management with bulk operations
 - Element interaction, waiters, screenshots, JavaScript execution
 - Assertions, cookies, form handling, and more
 - Robust error handling and session management
@@ -16,7 +18,7 @@ A comprehensive REST API for orchestrating Selenium WebDriver, built with Spring
 
 ### Prerequisites
 - Java 21 JDK
-- Maven 3.6+ 
+- Maven 3.6+
 - Chrome browser installed
 
 ### Build the Application
@@ -74,8 +76,12 @@ com.example.seleniumservice/
 
 - `GET /api/session/initialize` - Create a new WebDriver session
 - `GET /api/session/close/{sessionId}` - Close a specific session
+- `GET /api/session/closeAll` - Close all active sessions
 - `GET /api/session/list` - List all active sessions
+- `GET /api/session/ids` - Get IDs of all active sessions
+- `GET /api/session/status` - Get detailed system and session metrics
 - `POST /api/session/implicitWait/{sessionId}` - Set implicit wait timeout
+- `GET /api/session/implicitWait/{sessionId}` - Get current implicit wait timeout
 
 ### Navigation
 
@@ -134,6 +140,85 @@ Response:
 }
 ```
 
+### Get System Status and Metrics
+
+```bash
+curl -X GET http://localhost:8080/api/session/status
+```
+
+Response:
+```json
+{
+  "activeSessionCount": 3,
+  "status": "Active",
+  "memory": {
+    "used": "30 MB",
+    "total": "256 MB",
+    "max": "2048 MB",
+    "usagePercentage": "1%"
+  },
+  "cpu": {
+    "usage": "23.45%",
+    "cores": 8,
+    "model": "Intel(R) Core(TM) i7-9700K CPU @ 3.60GHz"
+  },
+  "ram": {
+    "total": "16384 MB",
+    "used": "8192 MB",
+    "available": "8192 MB",
+    "usagePercentage": "50%"
+  },
+  "gpu": [
+    {
+      "name": "NVIDIA GeForce RTX 3070",
+      "vendor": "NVIDIA Corporation",
+      "vram": "8192 MB"
+    }
+  ],
+  "disks": [
+    {
+      "name": "sda",
+      "model": "Samsung SSD 970 EVO 1TB",
+      "size": "1000 GB",
+      "reads": 1234567,
+      "writes": 7654321
+    }
+  ]
+}
+```
+
+### Get All Session IDs
+
+```bash
+curl -X GET http://localhost:8080/api/session/ids
+```
+
+Response:
+```json
+{
+  "sessionIds": [
+    "550e8400-e29b-41d4-a716-446655440000",
+    "661f9511-f30c-52e5-b827-557766551111",
+    "772a0622-g41d-63f6-c938-668877662222"
+  ],
+  "count": 3
+}
+```
+
+### Close All Sessions
+
+```bash
+curl -X GET http://localhost:8080/api/session/closeAll
+```
+
+Response:
+```json
+{
+  "success": true,
+  "message": "3 WebDriver sessions closed successfully"
+}
+```
+
 ### Navigate to a URL
 
 ```bash
@@ -166,91 +251,84 @@ curl -X GET \
   http://localhost:8080/api/session/close/550e8400-e29b-41d4-a716-446655440000
 ```
 
-## Complete Example: Login to a Website
+## Complete Example: Multisession Load Testing with Monitoring
 
-This bash script demonstrates a complete login workflow:
+This bash script demonstrates a complete workflow for multisession load testing with monitoring:
 
 ```bash
 #!/bin/bash
 
-# Initialize WebDriver session
-SESSION_RESPONSE=$(curl -s -X GET http://localhost:8080/api/session/initialize)
-SESSION_ID=$(echo $SESSION_RESPONSE | jq -r '.sessionId')
-echo "Session ID: $SESSION_ID"
+# Check initial system status
+echo "Checking initial system status..."
+curl -s -X GET http://localhost:8080/api/session/status
 
-# Navigate to login page
-curl -s -X POST \
-  http://localhost:8080/api/navigation/to/$SESSION_ID \
-  -H 'Content-Type: application/json' \
-  -d '{"url": "https://example.com/login"}'
+# Create multiple sessions (5 browsers)
+echo "Creating 5 browser sessions..."
+SESSIONS=()
+for i in {1..5}; do
+  SESSION_RESPONSE=$(curl -s -X GET http://localhost:8080/api/session/initialize)
+  SESSION_ID=$(echo $SESSION_RESPONSE | jq -r '.sessionId')
+  SESSIONS+=($SESSION_ID)
+  echo "Created session $i: $SESSION_ID"
+done
 
-# Find username field
-USERNAME_RESPONSE=$(curl -s -X POST \
-  http://localhost:8080/api/element/find/$SESSION_ID \
-  -H 'Content-Type: application/json' \
-  -d '{"locatorType": "id", "locatorValue": "username"}')
-USERNAME_ID=$(echo $USERNAME_RESPONSE | jq -r '.elementId')
+# Monitor status after creating sessions
+echo -e "\nChecking system status after creating sessions..."
+curl -s -X GET http://localhost:8080/api/session/status
 
-# Enter username
-curl -s -X POST \
-  http://localhost:8080/api/element/sendKeys/$SESSION_ID/$USERNAME_ID \
-  -H 'Content-Type: application/json' \
-  -d '{"text": "testuser", "clearFirst": true}'
+# Navigate all browsers to different pages
+echo -e "\nNavigating browsers to different pages..."
+for i in {0..4}; do
+  SESSION_ID=${SESSIONS[$i]}
+  URL="https://example.com/page$i"
+  echo "Navigating session ${SESSION_ID} to ${URL}"
+  curl -s -X POST \
+    "http://localhost:8080/api/navigation/to/${SESSION_ID}" \
+    -H 'Content-Type: application/json' \
+    -d "{\"url\": \"${URL}\"}"
+  
+  # Slight delay between navigations
+  sleep 1
+done
 
-# Find password field
-PASSWORD_RESPONSE=$(curl -s -X POST \
-  http://localhost:8080/api/element/find/$SESSION_ID \
-  -H 'Content-Type: application/json' \
-  -d '{"locatorType": "id", "locatorValue": "password"}')
-PASSWORD_ID=$(echo $PASSWORD_RESPONSE | jq -r '.elementId')
+# Take screenshots of all sessions
+echo -e "\nCapturing screenshots from all sessions..."
+for i in {0..4}; do
+  SESSION_ID=${SESSIONS[$i]}
+  echo "Taking screenshot for session ${SESSION_ID}"
+  curl -s -X GET \
+    "http://localhost:8080/api/script/screenshot/${SESSION_ID}" \
+    > "screenshot_session_${i}.png"
+done
 
-# Enter password
-curl -s -X POST \
-  http://localhost:8080/api/element/sendKeys/$SESSION_ID/$PASSWORD_ID \
-  -H 'Content-Type: application/json' \
-  -d '{"text": "password123", "clearFirst": true}'
+# Get a list of all session IDs
+echo -e "\nListing all active session IDs:"
+curl -s -X GET http://localhost:8080/api/session/ids
 
-# Find login button
-BUTTON_RESPONSE=$(curl -s -X POST \
-  http://localhost:8080/api/element/find/$SESSION_ID \
-  -H 'Content-Type: application/json' \
-  -d '{"locatorType": "xpath", "locatorValue": "//button[@type=\"submit\"]"}')
-BUTTON_ID=$(echo $BUTTON_RESPONSE | jq -r '.elementId')
+# Check system status under load
+echo -e "\nChecking system status under load..."
+curl -s -X GET http://localhost:8080/api/session/status
 
-# Click login button
-curl -s -X GET \
-  http://localhost:8080/api/element/click/$SESSION_ID/$BUTTON_ID
+# Close all sessions at once
+echo -e "\nClosing all sessions..."
+curl -s -X GET http://localhost:8080/api/session/closeAll
 
-# Wait for dashboard to load (verify login success)
-curl -s -X POST \
-  http://localhost:8080/api/wait/explicit/$SESSION_ID \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "locatorType": "xpath",
-    "locatorValue": "//h1[contains(text(), \"Dashboard\")]",
-    "waitCondition": "visible",
-    "timeout": 10
-  }'
+# Verify sessions are closed
+echo -e "\nVerifying all sessions are closed..."
+curl -s -X GET http://localhost:8080/api/session/status
 
-# Take a screenshot of the dashboard
-curl -s -X GET \
-  http://localhost:8080/api/script/screenshot/$SESSION_ID \
-  > dashboard.png
-
-# Close the session
-curl -s -X GET \
-  http://localhost:8080/api/session/close/$SESSION_ID
-
-echo "Login test completed!"
+echo -e "\nLoad test completed!"
 ```
 
-## Benefits of Modular Architecture
+## Benefits of the Enhanced Architecture
 
 1. **Maintainability**: Each class has a clear, focused responsibility
 2. **Testability**: Services and controllers can be tested in isolation
 3. **Scalability**: Multiple developers can work on different areas
 4. **Flexibility**: New features can be added without affecting existing code
-5. **Readability**: Code organization follows a logical structure
+5. **Monitoring**: Comprehensive system metrics track resource usage
+6. **Session Management**: Bulk operations for managing multiple sessions
+7. **Readability**: Code organization follows a logical structure
 
 ## Dependencies
 
@@ -259,6 +337,7 @@ The project uses the following major dependencies:
 - Spring Boot 3.4.3
 - Selenium Java 4.29.0
 - WebDriverManager 5.9.2
+- OSHI Core 6.4.0 (for system monitoring)
 - Lombok (for code simplification)
 - Java 21
 
@@ -273,11 +352,4 @@ The application can be configured through `application.properties`:
 server.port=8080
 
 # Selenium configuration
-selenium.default-page-load-timeout=30
-selenium.default-explicit-wait-timeout=30
-selenium.default-implicit-wait-timeout=0
-selenium.headless-by-default=true
-selenium.chrome-options=--disable-gpu,--no-sandbox,--disable-dev-shm-usage
-```
-
-You can adjust these properties to customize timeouts, browser behavior, and other settings.
+selenium

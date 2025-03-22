@@ -9,9 +9,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 
-import java.util.HashMap;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -158,5 +156,39 @@ public class WebDriverSessionService {
         }
         activeDrivers.clear();
         implicitWaitSettings.clear();
+    }
+
+    /**
+     * Close all active WebDriver sessions
+     *
+     * @return Number of sessions closed
+     */
+    public int closeAllDrivers() {
+        int closedCount = activeDrivers.size();
+
+        for (Map.Entry<String, WebDriver> entry : new HashMap<>(activeDrivers).entrySet()) {
+            try {
+                String sessionId = entry.getKey();
+                WebDriver driver = entry.getValue();
+                driver.quit();
+                activeDrivers.remove(sessionId);
+                implicitWaitSettings.remove(sessionId);
+                elementReferenceManager.clearSession(sessionId);
+            } catch (Exception e) {
+                // Log error but continue closing other sessions
+                System.err.println("Error closing session: " + e.getMessage());
+            }
+        }
+
+        return closedCount;
+    }
+
+    /**
+     * Get all active session IDs
+     *
+     * @return List of active session IDs
+     */
+    public List<String> getActiveSessionIds() {
+        return new ArrayList<>(activeDrivers.keySet());
     }
 }
