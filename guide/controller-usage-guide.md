@@ -1,6 +1,6 @@
 # Selenium REST API Controllers Guide
 
-This guide explains the new modular controller structure that replaces the monolithic WebDriverControllerExpanded. Each controller is focused on a specific aspect of the Selenium API, making the code more maintainable and easier to understand.
+This guide explains the modular controller structure that provides a comprehensive API for Selenium WebDriver automation. Each controller is focused on a specific aspect of the Selenium API, making the code more maintainable and easier to understand.
 
 ## Controller Package Structure
 
@@ -20,13 +20,16 @@ com.example.seleniumservice/
 
 ## API Routes
 
-The REST API endpoints are now organized by function, with consistent URL structures:
+The REST API endpoints are organized by function, with consistent URL structures:
 
 ### Session Management
 
 - `GET /api/session/initialize` - Create a new WebDriver session
 - `GET /api/session/close/{sessionId}` - Close a specific session
+- `GET /api/session/closeAll` - Close all active sessions
 - `GET /api/session/list` - List all active sessions
+- `GET /api/session/ids` - Get IDs of all active sessions
+- `GET /api/session/status` - Get detailed system and session metrics
 - `POST /api/session/implicitWait/{sessionId}` - Set implicit wait timeout
 - `GET /api/session/implicitWait/{sessionId}` - Get the current implicit wait setting
 
@@ -112,6 +115,66 @@ Response:
 {
   "sessionId": "550e8400-e29b-41d4-a716-446655440000",
   "message": "WebDriver initialized with visible window"
+}
+```
+
+**Get system and session status:**
+```bash
+curl -X GET http://localhost:8080/api/session/status
+```
+
+Response:
+```json
+{
+  "activeSessionCount": 3,
+  "status": "Active",
+  "memory": {
+    "used": "30 MB",
+    "total": "256 MB",
+    "max": "2048 MB",
+    "usagePercentage": "1%"
+  },
+  "cpu": {
+    "usage": "23.45%",
+    "cores": 8,
+    "model": "Intel(R) Core(TM) i7-9700K CPU @ 3.60GHz"
+  },
+  "ram": {
+    "total": "16384 MB",
+    "used": "8192 MB",
+    "available": "8192 MB",
+    "usagePercentage": "50%"
+  }
+}
+```
+
+**Get all session IDs:**
+```bash
+curl -X GET http://localhost:8080/api/session/ids
+```
+
+Response:
+```json
+{
+  "sessionIds": [
+    "550e8400-e29b-41d4-a716-446655440000",
+    "661f9511-f30c-52e5-b827-557766551111",
+    "772a0622-g41d-63f6-c938-668877662222"
+  ],
+  "count": 3
+}
+```
+
+**Close all sessions:**
+```bash
+curl -X GET http://localhost:8080/api/session/closeAll
+```
+
+Response:
+```json
+{
+  "success": true,
+  "message": "3 WebDriver sessions closed successfully"
 }
 ```
 
@@ -328,12 +391,16 @@ curl -X GET \
   http://localhost:8080/api/form/select/allOptions/550e8400-e29b-41d4-a716-446655440000/a1b2c3d4-e5f6-7890-a1b2-c3d4e5f67890
 ```
 
-## Complete Example: Login to a Website
+## Complete Example: Login to a Website with Monitoring
 
-Here's a complete example of using the API to log in to a website:
+Here's a complete example of using the API to log in to a website while monitoring active sessions:
 
 ```bash
 #!/bin/bash
+
+# Check system status before starting
+STATUS_RESPONSE=$(curl -s -X GET http://localhost:8080/api/session/status)
+echo "Initial system status: $STATUS_RESPONSE"
 
 # Initialize WebDriver session
 SESSION_RESPONSE=$(curl -s -X GET http://localhost:8080/api/session/initialize)
@@ -398,6 +465,10 @@ curl -s -X POST \
 curl -s -X GET \
   http://localhost:8080/api/script/screenshot/$SESSION_ID \
   > dashboard.png
+
+# Check system status after login
+STATUS_RESPONSE=$(curl -s -X GET http://localhost:8080/api/session/status)
+echo "System status after login: $STATUS_RESPONSE"
 
 # Close the session
 curl -s -X GET \
